@@ -7,9 +7,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 // A new kind of insurance companies emerges,
 // no more direct responsibility on a car crash !!
 // The one who will get a new car is the most hardworking
-// hash function cracker
+// hash function reverser
 library Hashlib {
-    /// @notice Hash the value _toHash
+    /// Hash the value _toHash
     function hash(bytes32 _toHash) public  pure returns (bytes32) {
         uint128 left = uint128(bytes16(_toHash));
         uint128 right = uint128(uint256(_toHash));
@@ -27,7 +27,7 @@ library Hashlib {
     }
 }
 
-contract AccidentFormFiller is Ownable {
+contract AccidentFormFiller is Ownable{
 
     struct Report {
         address driver1;
@@ -48,14 +48,14 @@ contract AccidentFormFiller is Ownable {
     modifier caseOpen() {
         require(!report.caseClosed, "Case is closed");
         _;
-    } 
+    }
 
-    /// @notice Fill the report with basic information
+    /// Fill the report with basic information
     function writeReport() public caseOpen {
         report = Report(driver1, driver2, value, 0, address(0), false, comments);
     }
 
-    /// @notice Fill the remaining fields of the report and mark it as case closed
+    /// Fill the remaining fields of the report and mark it as case closed
     function closeReport(bytes32 _answer, address _winner) public caseOpen {
         report.answer = _answer;
         report.winner = _winner;
@@ -84,18 +84,32 @@ contract CarCrash is Ownable {
     Report public report;
     AccidentFormFiller public filler;
     address public winner;
+    uint256 public gasThrottleValue;
 
     event CaseClosed(address winnner);
 
-    constructor(bytes32 _value, address _driver1, address _driver2, string memory _comments, AccidentFormFiller _filler) {
+    constructor(bytes32 _value, address _driver1, address _driver2, string memory _comments, AccidentFormFiller _filler, uint256 _gasThrottleValue) {
         value = _value;
         driver1 = _driver1;
         driver2 = _driver2;
+        // Ensure that both drivers are not contracts
+        uint256 size1 = 0;
+        uint256 size2 = 0;
+        assembly {
+            size1 := extcodesize(_driver1)
+            size1 := extcodesize(_driver2)
+        }
+        
+        require(size1 == 0, "Driver1 cannot be a contract");
+        require(size2 == 0, "Driver2 cannot be a contract");
+        
         comments = _comments;
         filler = _filler;
         
+        gasThrottleValue = _gasThrottleValue;
+        
         // Fill the fields with availabe information
-        (bool res,) = address(_filler).delegatecall(abi.encodeWithSignature("writeReport()"));
+        (bool res, ) = address(_filler).delegatecall(abi.encodeWithSignature("writeReport()"));
         require(res);
     }
 
@@ -107,15 +121,21 @@ contract CarCrash is Ownable {
     modifier caseOpen() {
         require(!report.caseClosed, "Case is closed");
         _;
-    } 
+    }
+    
+    // Mitigate front running attacks
+    // as the time of writting, a successful attempt function costs around 107700 gas
+    // so a good gas throttle value could be 110000
+    modifier gasThrottle() {
+        require(gasleft() <= gasThrottleValue, "Easy on the gas you crazy driver");
+        _;
+    }
 
-    /// @notice Each driver can try to crack the hash, the first one who crack it
-    ///         wins the case and won't have to pay for the damages.
-    function attempt(bytes32 _attempt) external onlyDrivers caseOpen returns (bool) {
+    function attempt(bytes32 _attempt) external onlyDrivers caseOpen gasThrottle returns (bool) {
 
         if (_attempt.hash() == value){
             winner = msg.sender; 
-            (bool res,) = address(filler).delegatecall(abi.encodeWithSignature("closeReport(bytes32,address)", _attempt, winner));
+            (bool res, ) = address(filler).delegatecall(abi.encodeWithSignature("closeReport(bytes32,address)", _attempt, winner));
             require(res);
             emit CaseClosed(winner);
             return true;
@@ -127,15 +147,20 @@ contract CarCrash is Ownable {
 
 contract InsuranceCompany is Ownable {
 
-    CarCrash[] cases;
-    mapping (bytes32 => bool) oldValues;
+    CarCrash[] public cases;
+    mapping (bytes32 => bool) public oldValues;
     
-    function resolveResponsibility(bytes32 _value, address _driver1, address _driver2, string calldata _comments, AccidentFormFiller _filler) external onlyOwner returns (CarCrash) {
-        require(!oldValues[_value]);
+    event NewCrash(uint256 _id, address _caseAddress);
+    
+    function resolveResponsibility(bytes32 _value, address _driver1, address _driver2, string calldata _comments, AccidentFormFiller _filler, uint256 _gasThrottleValue) external onlyOwner returns (CarCrash) {
+        require(!oldValues[_value], "This value has alredy been cracked");
         oldValues[_value] = true;
-        CarCrash newCase = new CarCrash(_value, _driver1, _driver2, _comments, _filler);
+        CarCrash newCase = new CarCrash(_value, _driver1, _driver2, _comments, _filler, _gasThrottleValue);
+        emit NewCrash(cases.length, address(newCase));
         cases.push(newCase);
         return newCase;
     }
 }
+
+
 // Works well with value 0x646f6e277420646f20796f7572206f776e2063727970746f0000000000000000

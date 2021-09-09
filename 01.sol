@@ -18,8 +18,8 @@ contract BytesHaiku is Ownable {
     }
 
     Poem[] public poems;
-    mapping (address => uint256) donations;
-    mapping (address => bool) authors;
+    mapping (address => uint256) public donations;
+    mapping (address => bool) public authors;
 
     event Donation(address donator, address author, uint256 amount);
 
@@ -34,7 +34,7 @@ contract BytesHaiku is Ownable {
     }
 
     // Poems live and die through the will of people
-    // Whom has created, has also the power to destroy
+    // Whom has created, also has the power to destroy
     function removePoem(uint256 id) external onlyAuthors(msg.sender) returns(bytes32){
         //Upon deleting poem, you get to see a random memory slot
         //Maybe it's a nice poem, maybe it's gibberish
@@ -87,7 +87,7 @@ contract BytesHaiku is Ownable {
     
     /// The owner is a non profit organization
     /// They will not destruct the contract
-    /// while funds are still in it
+    /// while funds due to the authors are still in it
     function killSwitch() external onlyOwner {
         selfdestruct(payable(owner()));
     }

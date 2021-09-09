@@ -29,7 +29,7 @@ contract Wallet {
     }
 
     /// @notice send ETH to an other address along with a customizable payload
-    function sendWithPayload(uint256 _amount, address payable _recipient, bytes calldata _payload) external onlyOwner {
+    function sendWithPayload(uint256 _amount, address payable _recipient, bytes memory _payload) external onlyOwner {
         require(_amount <= address(this).balance, "Not enough ETH in wallet");
         (bool success,) = _recipient.call{value: _amount}(_payload);
         require(success);

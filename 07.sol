@@ -17,34 +17,34 @@ contract PayChecks is Ownable {
     uint256[] public payGrades;
     mapping (address => uint32) public employeesId;
 
-    constructor(string memory _companyName, Employee[] memory _employees, uint256[] memory _payGrades) isNotContract(_employees) {
+    constructor(string memory _companyName, address[] memory _employeesAddresses, uint16[] memory _payGradeIds, uint256[] memory _payGrades) isNotContract(_employeesAddresses) {
+        require(_employeesAddresses.length == _payGrades.length, "_employeesAddresses and _payGrades must have the same length");
         companyName = _companyName;
         payGrades = _payGrades;
 
-        for (uint32 i = 0; i < _employees.length; i++) {
+        for (uint32 i = 0; i < _employeesAddresses.length; i++) {
             
-            // employees = _employees not supported yet
-            // so copy one by one
-            employees.push(_employees[i]);
+            employees.push(Employee(_employeesAddresses[i], _payGradeIds[i]));
             
             // Check that pay grade of each employee is in the _payGrades id range
-            require(_employees[i].payGradeId < _payGrades.length);
+            require(_payGradeIds[i] < _payGrades.length, "Invalid pay grade id");
             
-            address employeeAddress = _employees[i].employeeAddress;
+            address employeeAddress = _employeesAddresses[i];
             employeesId[employeeAddress] = i;
         }
     }
 
     /// @notice check that each employee is not a contract
-    modifier isNotContract(Employee[] memory _employees) {
+    modifier isNotContract(address[]  memory _employeesAddresses) {
 
-        for (uint32 i = 0; i < _employees.length; i++) {
-            address employeeAddress = _employees[i].employeeAddress;
+        for (uint32 i = 0; i < _employeesAddresses.length; i++) {
+            address employeeAddress = _employeesAddresses[i];
+            require(employeeAddress != address(0), "Invalid address 0");
+            uint256 size;
             assembly {
-                if iszero(employeeAddress) {revert(0,0)}
-                let size := extcodesize(employeeAddress)
-                if not(iszero(size)) {revert(0,0)}
+                size := extcodesize(employeeAddress)
             }
+            require(size == 0, "Address cannot be a contract");
         }
         _;
     }

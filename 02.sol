@@ -5,9 +5,9 @@ pragma solidity >=0.8.0;
 /// Those who can guess the future are rewarded
 contract GuessTheFuture {
 
-    uint256 currentGameFunds = 0;
+    uint256 public currentGameFunds = 0;
 
-    mapping (address => uint256) winnersPrizes;
+    mapping (address => uint256) public winnersPrizes;
     event Donator(address donator, uint256 amount);
     event Winner(address donator, uint256 amount);
 

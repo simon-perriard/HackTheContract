@@ -13,7 +13,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 /// 5 (FINISHED state). The owner can kill the contract, any remaining funds are sent to the owner.
 contract RockPaperScissors is Ownable {
 
-    enum GameState {FUNDING, COMMITMENT, REVEAL, WON, FINISHED}
+    enum GameState {FUNDING, COMMITMENT, REVEAL, WON, FINISHED, STALLED}
     GameState public currentState = GameState.FUNDING;
 
     address public immutable player1;
@@ -71,10 +71,13 @@ contract RockPaperScissors is Ownable {
         _;
     }
 
+    // Players have 1 week to go through the COMMITMENT and REVEAL states, after this time
+    // they can get back their amount at stake
     modifier stateCheckWithStall(GameState _state) {
         require(currentState == _state ||
-        block.timestamp >= creationTime + 1 weeks,
-        "Either it is too soon or the game is not finished.");
+                currentState == GameState.STALLED ||
+                block.timestamp > creationTime + 1 weeks,
+                "Either it is too soon or the game is not finished.");
         _;
     }
 
@@ -200,14 +203,23 @@ contract RockPaperScissors is Ownable {
         payable(winner).transfer(2*agreedStake);
     }
 
-    /// @notice when the game is finished or if the game is stalled for more thant a week
-    ///         , the owner can destruct the contract and reimburse the players if wanted
-    function killSwitch() external onlyOwner stateCheckWithStall(GameState.FINISHED) {
-        // Allow the owner to kill the game either when it is finished,
-        // or when it takes too long
-        selfdestruct(payable(owner()));
+    /// @notice if the game is stalled (one of the players does not reveal) for more thant a week
+    ///         the players are allowed to get back their stakes
+    function withdrawForStall() external onlyPlayers stateCheckWithStall(GameState.REVEAL) {
+        playerStates[msg.sender].stake = 0;
+        currentState = GameState.STALLED;
+
+        if (playerStates[player1].stake == 0 && playerStates[player2].stake == 0) {
+            currentState = GameState.FINISHED;
+        } 
+
+        payable(msg.sender).transfer(agreedStake);
     }
 
+    /// @notice no locked ether
+    function withdrawSurplus() external onlyOwner stateCheck(GameState.FINISHED) {
+        payable(owner()).transfer(address(this).balance);
+    }
 }
 
 /// Fabric for rock-paper-scissors games
@@ -221,7 +233,7 @@ contract RockPaperScissorsFabric is Ownable {
 
     function killGame(address _gameAddress) external onlyOwner {
         RockPaperScissors rps = RockPaperScissors(_gameAddress);
-        rps.killSwitch();
+        rps.withdrawSurplus();
     }
 
     function withdraw(uint256 _amount) external onlyOwner {
@@ -229,7 +241,5 @@ contract RockPaperScissorsFabric is Ownable {
         payable(msg.sender).transfer(_amount);
     }
 
-    function killSwitch() external onlyOwner {
-        selfdestruct(payable(owner()));
-    }
+    fallback() external payable {}
 }

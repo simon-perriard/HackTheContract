@@ -79,7 +79,7 @@ contract Court is Ownable {
         return false;
     }
 
-    /// @notice Each jury member can vot eon the case
+    /// @notice Each jury member can vote on the case
     ///         the decision is guilty (true) or not guilty (false)
     function vote(bool _choice) external caseOpen isJury hasNotVoted {
         juryVote[msg.sender].choice = _choice;
@@ -129,6 +129,7 @@ contract Court is Ownable {
     /// @notice get a signed version (by the judge) of the resolved case
     function RSAsign() caseClosed external view returns(Signature memory) {
         bytes20 h = bytes20(keccak256(abi.encodePacked(judge, decision, caseDescription)));
+        // Standard RSA sig : message.pow(key) % N
         uint256 sig = fastExpMod(uint160(h), judgePublicKey, N);
         return Signature(sig, judge, decision, caseDescription);
     }
