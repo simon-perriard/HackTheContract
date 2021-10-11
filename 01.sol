@@ -76,7 +76,7 @@ contract BytesHaiku is Ownable {
 
     function donateToAuthor(address _author) external onlyAuthors(_author) payable {
         emit Donation(msg.sender, _author, msg.value);
-        donations[_author] = msg.value;
+        donations[_author] += msg.value;
     }
 
     function authorWithdraw() external onlyAuthors(msg.sender) {
